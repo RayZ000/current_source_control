@@ -38,6 +38,7 @@ class MainWindow(QMainWindow):
     disconnect_requested = pyqtSignal()
     channel_changed = pyqtSignal(str)
     apply_requested = pyqtSignal(float, float, bool)
+    quick_change_requested = pyqtSignal(float, float)
     output_toggled = pyqtSignal(bool)
     voltage_changed = pyqtSignal(float)
     current_limit_changed = pyqtSignal(float)
@@ -66,6 +67,9 @@ class MainWindow(QMainWindow):
         self.refresh_button.setEnabled(not connected)
         self.output_button.setEnabled(connected)
         self.apply_button.setEnabled(connected)
+        self.quick_button.setEnabled(connected)
+        self.safe_ramp_check.setEnabled(connected)
+        self._toggle_safe_ramp_controls(connected and self.safe_ramp_check.isChecked())
         self.channel_a.setEnabled(connected)
         self.channel_b.setEnabled(connected)
         self.autorange_check.setEnabled(connected)
@@ -185,14 +189,41 @@ class MainWindow(QMainWindow):
         button_row = QHBoxLayout()
         self.apply_button = QPushButton("Apply Settings")
         button_row.addWidget(self.apply_button)
+        self.apply_button = QPushButton("Apply Settings")
+        button_row.addWidget(self.apply_button)
+        self.quick_button = QPushButton("Quick Change")
+        button_row.addWidget(self.quick_button)
         self.output_button = QPushButton("Enable Output")
         self.output_button.setCheckable(True)
         button_row.addWidget(self.output_button)
         button_row.addStretch()
         layout.addLayout(button_row)
 
+        ramp_row = QHBoxLayout()
+        self.safe_ramp_check = QCheckBox("Safe Ramp")
+        ramp_row.addWidget(self.safe_ramp_check)
+        ramp_row.addWidget(QLabel("Step"))
+        self.ramp_step_spin = QDoubleSpinBox()
+        self.ramp_step_spin.setRange(0.001, 1000.0)
+        self.ramp_step_spin.setDecimals(3)
+        self.ramp_step_spin.setValue(5.0)
+        self.ramp_step_spin.setSuffix(" V")
+        ramp_row.addWidget(self.ramp_step_spin)
+        ramp_row.addWidget(QLabel("Dwell"))
+        self.ramp_dwell_spin = QDoubleSpinBox()
+        self.ramp_dwell_spin.setRange(0.0, 10.0)
+        self.ramp_dwell_spin.setDecimals(3)
+        self.ramp_dwell_spin.setValue(0.1)
+        self.ramp_dwell_spin.setSuffix(" s")
+        ramp_row.addWidget(self.ramp_dwell_spin)
+        ramp_row.addStretch()
+        layout.addLayout(ramp_row)
+
         self.apply_button.clicked.connect(self._emit_apply)
+        self.quick_button.clicked.connect(self._emit_quick_change)
         self.output_button.toggled.connect(self._emit_output_toggle)
+        self.safe_ramp_check.toggled.connect(self._toggle_safe_ramp_controls)
+        self._toggle_safe_ramp_controls(False)
         return group
 
     def _emit_apply(self) -> None:
@@ -200,6 +231,12 @@ class MainWindow(QMainWindow):
             self.voltage_spin.value(),
             self.current_limit_spin.value(),
             self.autorange_check.isChecked(),
+        )
+
+    def _emit_quick_change(self) -> None:
+        self.quick_change_requested.emit(
+            self.voltage_spin.value(),
+            self.current_limit_spin.value(),
         )
 
     def _emit_output_toggle(self, enabled: bool) -> None:
@@ -213,6 +250,20 @@ class MainWindow(QMainWindow):
         self.log_view.setReadOnly(True)
         layout.addWidget(self.log_view)
         return group
+
+
+    def _toggle_safe_ramp_controls(self, enabled: bool) -> None:
+        self.ramp_step_spin.setEnabled(enabled)
+        self.ramp_dwell_spin.setEnabled(enabled)
+
+    def safe_ramp_enabled(self) -> bool:
+        return self.safe_ramp_check.isChecked()
+
+    def safe_ramp_step(self) -> float:
+        return self.ramp_step_spin.value()
+
+    def safe_ramp_dwell(self) -> float:
+        return self.ramp_dwell_spin.value()
 
 
 class _SignalBlocker:

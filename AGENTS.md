@@ -28,6 +28,7 @@
 
 ## Instrument Safety & Configuration
 - Default all scripts to `standby` and require explicit voltage/current limits; guard automated ramps with configurable soft limits.
+- Use the GUI `Quick Change` + Safe Ramp controls when adjusting high-voltage piezo biases so large swings are broken into safe increments.
 - Keep VISA addresses, credentials, and lab secrets in `.env` (git-ignored) and document required keys in `docs/config.example.env`.
 - Update `docs/automation_playbooks/` with wiring diagrams and emergency shutdown steps whenever a new automation flow lands.
 

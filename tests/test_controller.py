@@ -84,3 +84,44 @@ def test_drain_error_queue_returns_entries():
     # Subsequent call should be empty because queue is drained.
     assert controller.drain_error_queue() == []
     controller.disconnect()
+
+
+def test_quick_set_source_updates_without_toggle():
+    transport = SimulatedTransport()
+    controller = Keithley2612Controller(transport)
+
+    controller.connect()
+    controller.reset()
+    controller.configure_voltage_source(VoltageConfig(level_v=1.0, current_limit_a=0.001))
+    controller.enable_output(True)
+
+    controller.quick_set_source(level_v=2.5, current_limit_a=0.002)
+
+    state = transport._channels[Channel.A.value]
+    assert pytest.approx(state.level_v, rel=1e-6) == 2.5
+    assert pytest.approx(state.limit_i, rel=1e-6) == 0.002
+    assert state.output_on is True
+
+    controller.disconnect()
+
+
+def test_ramp_to_voltage_uses_steps():
+    transport = SimulatedTransport()
+    controller = Keithley2612Controller(transport)
+
+    controller.connect()
+    controller.reset()
+    controller.configure_voltage_source(VoltageConfig(level_v=0.0, current_limit_a=0.005))
+    controller.enable_output(True)
+
+    result = controller.ramp_to_voltage(0.05, step_v=0.02, dwell_s=0.0, current_limit_a=0.005)
+    assert result is False
+
+    state = transport._channels[Channel.A.value]
+    assert pytest.approx(state.level_v, rel=1e-6) == 0.05
+
+    transport.set_compliance(Channel.A.value, True)
+    result = controller.ramp_to_voltage(0.1, step_v=0.02, dwell_s=0.0, current_limit_a=0.005)
+    assert result is True
+    assert controller.read_compliance() is True
+    controller.disconnect()

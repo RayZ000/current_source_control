@@ -72,7 +72,6 @@ class _ChannelState:
     display_measure: str = "MEASURE_DCAMPS"
     measure_func: str = "MEASURE_DCAMPS"
     measure_autorange: bool = True
-    measure_func: str = "MEASURE_DCAMPS"
 
 
 @dataclass
@@ -193,6 +192,9 @@ class SimulatedTransport:
             return f"{state.level_v}"
         if expr.endswith(".measure.i()"):
             return "0.0"
+        if expr.endswith(".source.levelv"):
+            channel = expr.split(".")[0]
+            return f"{self._channels[channel].level_v}"
         if expr == "errorqueue.count":
             return str(len(self._error_queue))
         raise NotImplementedError(f"Simulator cannot handle expression: {expr}")

@@ -98,6 +98,53 @@ class Keithley2612Controller:
         alias = self._channel.alias
         self._write(f"{alias}.source.limiti = {current_limit_a}")
 
+    def quick_set_source(self, *, level_v: Optional[float] = None, current_limit_a: Optional[float] = None) -> bool:
+        """Adjust voltage and/or current limit without toggling output."""
+        alias = self._channel.alias
+        commands: list[str] = []
+        if level_v is not None:
+            commands.append(f"{alias}.source.levelv = {level_v}")
+        if current_limit_a is not None:
+            commands.append(f"{alias}.source.limiti = {current_limit_a}")
+        if commands:
+            self._batch_write(commands)
+        return self.read_compliance()
+
+    def ramp_to_voltage(
+        self,
+        target_v: float,
+        *,
+        step_v: float,
+        dwell_s: float,
+        current_limit_a: Optional[float] = None,
+    ) -> bool:
+        """Ramp the output to target_v in step_v increments with dwell_s delays."""
+        if step_v <= 0:
+            raise ValueError("step_v must be positive")
+        if dwell_s < 0:
+            raise ValueError("dwell_s must be non-negative")
+        alias = self._channel.alias
+        current_level = float(self._transport.query(f"print({alias}.source.levelv)") or 0.0)
+        delta = target_v - current_level
+        if abs(delta) <= step_v:
+            return self.quick_set_source(level_v=target_v, current_limit_a=current_limit_a)
+        steps = int(abs(delta) // step_v)
+        if abs(delta) % step_v:
+            steps += 1
+        direction = 1 if delta > 0 else -1
+        level = current_level
+        compliance = False
+        for i in range(steps):
+            remaining = target_v - level
+            increment = direction * min(step_v, abs(remaining))
+            level += increment
+            compliance = self.quick_set_source(
+                level_v=level, current_limit_a=current_limit_a if i == 0 else None
+            ) or compliance
+            if dwell_s:
+                time.sleep(dwell_s)
+        return compliance
+
     def enable_output(self, enabled: bool) -> None:
         alias = self._channel.alias
         state = "OUTPUT_ON" if enabled else "OUTPUT_OFF"

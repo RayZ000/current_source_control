@@ -141,6 +141,77 @@ class Application:
             self._show_error("Apply failed", str(exc))
             self.window.append_log(f"Apply error: {exc}")
 
+    def handle_quick_change(self, level_v: float, current_limit: float) -> None:
+        if self._connection is None:
+            self.window.append_log("Cannot quick change while disconnected.")
+            return
+        if current_limit <= 0:
+            self._show_error("Quick Change", "Set a positive current limit before applying Quick Change.")
+            return
+        controller = self._connection.controller
+        try:
+            if not self._output_enabled:
+                controller.enable_output(False)
+                controller.configure_voltage_source(
+                    VoltageConfig(
+                        level_v=level_v,
+                        current_limit_a=current_limit,
+                        autorange=self.window.autorange_check.isChecked(),
+                    )
+                )
+                controller.configure_display_for_voltage()
+                self._output_enabled = False
+                self._measurement_timer.stop()
+                self.window.append_log("Quick change cached with output off; enable output to drive the new level.")
+                self._update_compliance()
+                self._log_error_queue("Quick Change (output off)")
+                return
+            ramp_active = self.window.safe_ramp_enabled()
+            compliance = False
+            if ramp_active:
+                step_v = max(self.window.safe_ramp_step(), 0.001)
+                dwell_s = max(self.window.safe_ramp_dwell(), 0.0)
+                self.window.quick_button.setEnabled(False)
+                self.window.append_log(
+                    f"Quick change ramping in {step_v:.3f} V steps with {dwell_s:.3f} s dwell."
+                )
+                try:
+                    compliance = controller.ramp_to_voltage(
+                        level_v, step_v=step_v, dwell_s=dwell_s, current_limit_a=current_limit
+                    )
+                finally:
+                    self.window.quick_button.setEnabled(True)
+            else:
+                compliance = controller.quick_set_source(level_v=level_v, current_limit_a=current_limit)
+            self._output_enabled = True
+            if not self._measurement_timer.isActive():
+                self._measurement_timer.start()
+            controller.set_beeper_enabled(True)
+            controller.beep(0.1, 1500)
+            reading_msg = ""
+            try:
+                reading = controller.measure_voltage()
+            except Exception as exc:  # pragma: no cover - hardware quirks
+                reading_msg = f" (voltage readback failed: {exc})"
+            else:
+                reading_msg = f" (display reading ≈ {reading:.3f} V)"
+            if ramp_active:
+                self.window.append_log(
+                    f"Quick change ramp complete for {controller.channel.name}{reading_msg}"
+                )
+            else:
+                self.window.append_log(
+                    f"Quick change applied for {controller.channel.name}{reading_msg}"
+                )
+            self._update_compliance()
+            if compliance:
+                self.window.append_log("Compliance active after quick change; review limits.")
+        except Exception as exc:  # pragma: no cover
+            self._show_error("Quick Change failed", str(exc))
+            self.window.append_log(f"Quick Change error: {exc}")
+            return
+        self._log_error_queue("Quick Change")
+
     def handle_output_toggle(self, enabled: bool) -> None:
         if self._connection is None:
             self.window.set_output_state(False)
@@ -224,6 +295,7 @@ class Application:
         self.window.disconnect_requested.connect(self.handle_disconnect)
         self.window.channel_changed.connect(self.handle_channel_change)
         self.window.apply_requested.connect(self.handle_apply)
+        self.window.quick_change_requested.connect(self.handle_quick_change)
         self.window.output_toggled.connect(self.handle_output_toggle)
         self.window.voltage_changed.connect(self.handle_voltage_change)
         self.window.current_limit_changed.connect(self.handle_current_limit_change)
