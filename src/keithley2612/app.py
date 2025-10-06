@@ -136,6 +136,28 @@ class Application:
         controller = self._connection.controller
         try:
             controller.enable_output(enabled)
+            controller.configure_display_for_voltage()
+            reading_msg = ""
+            try:
+                reading = controller.measure_voltage()
+            except Exception as exc:  # pragma: no cover - requires hardware quirks
+                reading_msg = f" (voltage readback failed: {exc})"
+            else:
+                reading_msg = f" (display reading ≈ {reading:.3f} V)"
+            state = "enabled" if enabled else "disabled"
+            self.window.append_log(f"Output {state} for {controller.channel.name}{reading_msg}")
+            controller.set_beeper_enabled(True)
+            controller.beep(0.15, 1200)
+            self._update_compliance()
+        except Exception as exc:  # pragma: no cover
+            self._show_error("Output toggle failed", str(exc))
+            self.window.append_log(f"Output toggle error: {exc}")
+            self.window.set_output_state(False)
+            self.window.append_log("Cannot toggle output while disconnected.")
+            return
+        controller = self._connection.controller
+        try:
+            controller.enable_output(enabled)
             state = "enabled" if enabled else "disabled"
             self.window.append_log(f"Output {state} for {controller.channel.name}")
             self._update_compliance()

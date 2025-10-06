@@ -58,9 +58,18 @@ def test_beeper_and_display_configuration():
     assert transport.display_screen == "SMUA"
     assert transport._channels[Channel.A.value].display_measure == "MEASURE_DCVOLTS"
 
+    controller.beep(0.2, 1500)
+    assert transport.last_beep == "beeper.beep(0.2, 1500)"
+
+    transport._channels[Channel.A.value].level_v = 1.234
+    assert controller.measure_voltage() == pytest.approx(1.234)
+
     controller.select_channel(Channel.B)
     controller.configure_display_for_voltage()
     assert transport.display_screen == "SMUB"
     assert transport._channels[Channel.B.value].display_measure == "MEASURE_DCVOLTS"
+
+    transport._channels[Channel.B.value].level_v = 4.567
+    assert controller.measure_voltage() == pytest.approx(4.567)
 
     controller.disconnect()

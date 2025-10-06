@@ -85,6 +85,7 @@ class SimulatedTransport:
     )
     _beeper_enabled: bool = field(default=False, init=False)
     _display_screen: str = field(default="HOME", init=False)
+    _last_beep: str | None = field(default=None, init=False)
 
     def open(self) -> None:
         self._is_open = True
@@ -116,14 +117,18 @@ class SimulatedTransport:
                 state.__dict__.update(_ChannelState().__dict__)
             self._beeper_enabled = False
             self._display_screen = "HOME"
+            self._last_beep = None
             return
         if command.endswith("reset()"):
             channel = command.split(".")[0]
             self._channels[channel] = _ChannelState()
             return
         if command.startswith("beeper.enable"):
-            value = command.split("=")[-1].strip()
-            self._beeper_enabled = value in {"1", "true", "True"}
+            value = command.split("=")[-1].strip().split(".")[-1].lower()
+            self._beeper_enabled = value in {"1", "on", "true"}
+            return
+        if command.startswith("beeper.beep"):
+            self._last_beep = command
             return
         if command.startswith("display.screen"):
             self._display_screen = command.split("=")[-1].strip().split(".")[-1]
@@ -136,7 +141,9 @@ class SimulatedTransport:
         if "=" in command:
             lhs, rhs = [part.strip() for part in command.split("=", maxsplit=1)]
             channel, attribute = lhs.split(".", maxsplit=1)
-            state = self._channels[channel]
+            state = self._channels.get(channel)
+            if state is None:
+                raise NotImplementedError(f"Simulator cannot handle command: {command}")
             if attribute == "source.func":
                 state.func = rhs.split(".")[-1]
                 return
@@ -159,6 +166,12 @@ class SimulatedTransport:
             channel = expr.split(".")[0]
             state = self._channels[channel]
             return "1" if state.compliance else "0"
+        if expr.endswith(".measure.v()"):
+            channel = expr.split(".")[0]
+            state = self._channels[channel]
+            return f"{state.level_v}"
+        if expr.endswith(".measure.i()"):
+            return "0.0"
         raise NotImplementedError(f"Simulator cannot handle expression: {expr}")
 
     def set_compliance(self, channel: str, compliance: bool) -> None:
@@ -172,3 +185,7 @@ class SimulatedTransport:
     @property
     def display_screen(self) -> str:
         return self._display_screen
+
+    @property
+    def last_beep(self) -> str | None:
+        return self._last_beep

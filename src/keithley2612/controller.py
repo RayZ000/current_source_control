@@ -101,7 +101,12 @@ class Keithley2612Controller:
 
     def set_beeper_enabled(self, enabled: bool) -> None:
         """Enable or disable the front-panel beeper."""
-        self._write(f"beeper.enable = {1 if enabled else 0}")
+        state = "beeper.ON" if enabled else "beeper.OFF"
+        self._write(f"beeper.enable = {state}")
+
+    def beep(self, duration: float = 0.2, frequency_hz: int = 1200) -> None:
+        """Issue an audible beep for feedback when toggling output."""
+        self._write(f"beeper.beep({duration}, {frequency_hz})")
 
     def configure_display_for_voltage(self) -> None:
         """Mirror the selected channel and show voltage on the front-panel display."""
@@ -112,6 +117,15 @@ class Keithley2612Controller:
             f"display.{alias}.measure.func = display.MEASURE_DCVOLTS",
         ]
         self._batch_write(commands)
+
+    def measure_voltage(self) -> float:
+        """Trigger a voltage measurement and return the reading."""
+        alias = self._channel.alias
+        response = self._transport.query(f"print({alias}.measure.v())")
+        try:
+            return float(response)
+        except ValueError as exc:
+            raise ValueError(f"Unexpected voltage reading: {response!r}") from exc
 
     def _write(self, command: str) -> None:
         if not self._connected:

@@ -36,3 +36,4 @@
 - Before merging hardware-facing changes, run the minimal `pyvisa` smoke script on the lab PC to confirm GPIB connectivity and address discovery.
 - Follow an iterative loop: implement and unit-test on the laptop → deploy the change set or test script to the lab PC → validate against the instrument → record observations in docs/tests and repeat.
 - Use the built-in simulator by choosing `sim://2612` in the GUI or tests when hardware is unavailable; swap to the actual `GPIB0::n::INSTR` address on the lab PC.
+- Before lab runs, execute `scripts/smoke_check.py` for connectivity and `scripts/panel_feedback_check.py` to confirm beeper/display behaviour.
