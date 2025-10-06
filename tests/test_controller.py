@@ -1,6 +1,6 @@
 import pytest
 
-from keithley2612 import Channel, Keithley2612Controller, VoltageConfig
+from keithley2612 import Channel, ErrorEntry, Keithley2612Controller, VoltageConfig
 from keithley2612.transport import SimulatedTransport
 
 
@@ -74,4 +74,16 @@ def test_beeper_and_display_configuration():
     transport._channels[Channel.B.value].level_v = 4.567
     assert controller.measure_voltage() == pytest.approx(4.567)
 
+    controller.disconnect()
+
+
+def test_drain_error_queue_returns_entries():
+    transport = SimulatedTransport()
+    transport.push_error((-286, 'Runtime error', 3, 0))
+    controller = Keithley2612Controller(transport)
+    controller.connect()
+    entries = controller.drain_error_queue()
+    assert entries == [ErrorEntry(-286, 'Runtime error', 3, 0)]
+    # Subsequent call should be empty because queue is drained.
+    assert controller.drain_error_queue() == []
     controller.disconnect()

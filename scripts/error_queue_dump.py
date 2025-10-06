@@ -1,10 +1,4 @@
-#!/usr/bin/env python
-"""Print and clear the Keithley 2612 error queue."""
-from __future__ import annotations
-
-import argparse
-
-from keithley2612.controller import Keithley2612Controller
+from keithley2612 import ErrorEntry, Keithley2612Controller
 from keithley2612.transport import SimulatedTransport, VisaTransport
 
 
@@ -16,12 +10,8 @@ def build_controller(resource: str) -> Keithley2612Controller:
     return Keithley2612Controller(transport)
 
 
-def pop_error(transport) -> str:
-    cmd = (
-        "local code, msg, severity, node = errorqueue.next() "
-        "if code then print(string.format('%d|%s|%d|%d', code, msg, severity, node)) end"
-    )
-    return transport.query(cmd)
+def format_entry(entry: ErrorEntry) -> str:
+    return f"{entry.code}|{entry.message}|{entry.severity}|{entry.node}"
 
 
 def main() -> int:
@@ -32,18 +22,12 @@ def main() -> int:
     controller = build_controller(args.resource)
     controller.connect()
     try:
-        transport = controller._transport  # type: ignore[attr-defined]
-        lines = []
-        while True:
-            result = pop_error(transport).strip()
-            if not result:
-                break
-            lines.append(result)
-        if not lines:
+        entries = controller.drain_error_queue()
+        if not entries:
             print("Error queue empty")
         else:
-            for line in lines:
-                print(line)
+            for entry in entries:
+                print(format_entry(entry))
     finally:
         controller.disconnect()
     return 0

@@ -8,6 +8,15 @@ from typing import Iterable, Optional
 from .transport import InstrumentTransport
 
 
+
+
+@dataclass
+class ErrorEntry:
+    code: int
+    message: str
+    severity: int
+    node: int
+
 class Channel(str, Enum):
     """SMU channel identifiers."""
 
@@ -109,6 +118,28 @@ class Keithley2612Controller:
         alias = self._channel.alias
         response = self._transport.query(f"print({alias}.source.compliance)")
         return response.strip() in {"1", "true", "True"}
+
+    def drain_error_queue(self) -> list[ErrorEntry]:
+        """Retrieve and clear the instrument error queue."""
+        entries: list[ErrorEntry] = []
+        script = (
+            "local code, msg, severity, node = errorqueue.next();"
+            "if code then print(string.format('%d|%s|%d|%d', code, msg, severity, node)) end"
+        )
+        while True:
+            response = self._transport.query(script)
+            text = response.strip()
+            if not text:
+                break
+            parts = text.split("|", 3)
+            if len(parts) != 4:
+                continue
+            code, message, severity, node = parts
+            try:
+                entries.append(ErrorEntry(int(code), message, int(severity), int(node)))
+            except ValueError:
+                continue
+        return entries
 
     def set_beeper_enabled(self, enabled: bool) -> None:
         """Enable or disable the front-panel beeper."""

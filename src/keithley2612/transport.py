@@ -89,6 +89,7 @@ class SimulatedTransport:
     _beeper_enabled: bool = field(default=False, init=False)
     _display_screen: str = field(default="HOME", init=False)
     _last_beep: str | None = field(default=None, init=False)
+    _error_queue: list[tuple[int, str, int, int]] = field(default_factory=list, init=False)
 
     def open(self) -> None:
         self._is_open = True
@@ -107,6 +108,13 @@ class SimulatedTransport:
         command = command.strip()
         if command == "*IDN?":
             return self.identity
+        if "errorqueue.next()" in command:
+            if self._error_queue:
+                code, message, severity, node = self._error_queue.pop(0)
+                if "string.format" in command:
+                    return f"{code}|{message}|{severity}|{node}"
+                return str(code)
+            return ""
         if command.startswith("print(") and command.endswith(")"):
             expr = command[len("print(") : -1]
             return self._evaluate_expression(expr)
@@ -121,6 +129,7 @@ class SimulatedTransport:
             self._beeper_enabled = False
             self._display_screen = "HOME"
             self._last_beep = None
+            self._error_queue.clear()
             return
         if command.endswith("reset()"):
             channel = command.split(".")[0]
@@ -129,6 +138,9 @@ class SimulatedTransport:
         if command.startswith("beeper.enable"):
             value = command.split("=")[-1].strip().split(".")[-1].lower()
             self._beeper_enabled = value in {"1", "on", "true"}
+            return
+        if command.startswith("errorqueue.clear"):
+            self._error_queue.clear()
             return
         if command.startswith("beeper.beep"):
             self._last_beep = command
@@ -194,6 +206,9 @@ class SimulatedTransport:
     @property
     def display_screen(self) -> str:
         return self._display_screen
+
+    def push_error(self, entry: tuple[int, str, int, int]) -> None:
+        self._error_queue.append(entry)
 
     @property
     def last_beep(self) -> str | None:

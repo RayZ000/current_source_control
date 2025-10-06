@@ -78,6 +78,7 @@ class Application:
             controller.enable_output(False)
             self.window.set_output_state(False)
             self.window.set_compliance_status(True)
+            self._log_error_queue("Connect")
         except Exception as exc:  # pragma: no cover - PyQt runtime behaviour
             self._show_error("Failed to connect", str(exc))
             self.window.append_log(f"Connection error: {exc}")
@@ -135,6 +136,7 @@ class Application:
             )
             self.window.set_output_state(False)
             self._update_compliance()
+            self._log_error_queue("Apply Settings")
         except Exception as exc:  # pragma: no cover
             self._show_error("Apply failed", str(exc))
             self.window.append_log(f"Apply error: {exc}")
@@ -167,6 +169,7 @@ class Application:
             state = "enabled" if enabled else "disabled"
             self.window.append_log(f"Output {state} for {controller.channel.name}{reading_msg}")
             self._update_compliance()
+            self._log_error_queue(f"Output {state}")
         except Exception as exc:  # pragma: no cover
             self._show_error("Output toggle failed", str(exc))
             self.window.append_log(f"Output toggle error: {exc}")
@@ -194,8 +197,26 @@ class Application:
             reading = controller.measure_voltage()
         except Exception as exc:  # pragma: no cover - hardware specific
             self.window.status_bar.showMessage(f"Measurement failed: {exc}", 3000)
+            self._log_error_queue("Measurement poll")
             return
         self.window.status_bar.showMessage(f"Measured voltage: {reading:.4f} V", 1500)
+        self._log_error_queue("Measurement poll")
+
+    def _log_error_queue(self, context: str) -> None:
+        if self._connection is None:
+            return
+        controller = self._connection.controller
+        try:
+            entries = controller.drain_error_queue()
+        except Exception as exc:  # pragma: no cover - VISA/firmware quirks
+            self.window.append_log(f"{context}: unable to read error queue ({exc})")
+            return
+        if not entries:
+            return
+        for entry in entries:
+            self.window.append_log("{}: instrument error {} (severity {}): {}".format(
+                context, entry.code, entry.severity, entry.message
+            ))
 
     def _wire_signals(self) -> None:
         self.window.refresh_requested.connect(self.refresh_resources)
