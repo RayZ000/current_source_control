@@ -77,22 +77,11 @@ class Keithley2612Controller:
         alias = self._channel.alias
         commands: list[str] = [
             f"{alias}.source.func = {alias}.OUTPUT_DCVOLTS",
-            f"{alias}.measure.func = {alias}.MEASURE_DCVOLTS",
         ]
         if config.autorange:
-            commands.extend(
-                [
-                    f"{alias}.source.autorangev = {alias}.AUTORANGE_ON",
-                    f"{alias}.measure.autorangev = {alias}.AUTORANGE_ON",
-                ]
-            )
+            commands.append(f"{alias}.source.autorangev = {alias}.AUTORANGE_ON")
         else:
-            commands.extend(
-                [
-                    f"{alias}.source.autorangev = {alias}.AUTORANGE_OFF",
-                    f"{alias}.measure.autorangev = {alias}.AUTORANGE_OFF",
-                ]
-            )
+            commands.append(f"{alias}.source.autorangev = {alias}.AUTORANGE_OFF")
         commands.extend(
             [
                 f"{alias}.source.levelv = {config.level_v}",
