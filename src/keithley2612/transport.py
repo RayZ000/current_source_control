@@ -70,6 +70,7 @@ class _ChannelState:
     output_on: bool = False
     compliance: bool = False
     display_measure: str = "MEASURE_DCAMPS"
+    measure_func: str = "MEASURE_DCAMPS"
 
 
 @dataclass
