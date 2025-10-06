@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "keithley2612-controller"
+version = "0.1.0"
+description = "GUI controller for the Keithley 2612 SourceMeter"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Research Lab" }]
+dependencies = [
+  "PyQt6>=6.6",
+  "pyvisa>=1.13",
+]
+
+[project.optional-dependencies]
+dev = [
+  "black>=23.9",
+  "ruff>=0.1",
+  "pytest>=7.4",
+  "pytest-asyncio>=0.23",
+]
+hardware = [
+  "pyvisa-py>=0.7",
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 88
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E203"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra"
+markers = [
+  "hardware: marks tests that require a physical instrument (skips by default)",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
