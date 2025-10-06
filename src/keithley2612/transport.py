@@ -71,6 +71,8 @@ class _ChannelState:
     compliance: bool = False
     display_measure: str = "MEASURE_DCAMPS"
     measure_func: str = "MEASURE_DCAMPS"
+    measure_autorange: bool = True
+    measure_func: str = "MEASURE_DCAMPS"
 
 
 @dataclass
@@ -159,6 +161,12 @@ class SimulatedTransport:
                 return
             if attribute == "source.output":
                 state.output_on = rhs.endswith("OUTPUT_ON")
+                return
+            if attribute == "measure.func":
+                state.measure_func = rhs.split(".")[-1]
+                return
+            if attribute == "measure.autorangev":
+                state.measure_autorange = rhs.endswith("AUTORANGE_ON")
                 return
         raise NotImplementedError(f"Simulator cannot handle command: {command}")
 

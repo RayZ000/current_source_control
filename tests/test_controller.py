@@ -19,6 +19,8 @@ def test_configure_voltage_source_updates_simulator():
     assert pytest.approx(state.level_v, rel=1e-6) == 2.0
     assert pytest.approx(state.limit_i, rel=1e-6) == 0.003
     assert state.output_on is True
+    assert state.measure_func == "MEASURE_DCVOLTS"
+    assert state.measure_autorange is True
 
     transport.set_compliance(Channel.A.value, True)
     assert controller.read_compliance() is True

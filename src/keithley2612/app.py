@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from . import Channel, Keithley2612Controller, VoltageConfig
@@ -27,6 +28,10 @@ class Application:
         self.app: QApplication = create_application()
         self.window = window or MainWindow()
         self._connection: Optional[ConnectionState] = None
+        self._output_enabled: bool = False
+        self._measurement_timer = QTimer()
+        self._measurement_timer.setInterval(750)
+        self._measurement_timer.timeout.connect(self._poll_measurement)
         self._wire_signals()
         self.window.show()
         self.refresh_resources()
@@ -59,6 +64,8 @@ class Application:
             identity = controller.identify()
             self.window.append_log(f"Connected to {identity}")
             self.window.set_connection_state(True)
+            self._output_enabled = False
+            self._measurement_timer.stop()
             controller.set_beeper_enabled(True)
             controller.configure_display_for_voltage()
             controller.configure_voltage_source(
@@ -92,6 +99,8 @@ class Application:
         controller.disconnect()
         self.window.append_log(f"Disconnected from {self._connection.resource}")
         self._connection = None
+        self._output_enabled = False
+        self._measurement_timer.stop()
         self.window.set_connection_state(False)
         self.window.set_compliance_status(True)
 
@@ -119,6 +128,8 @@ class Application:
                 VoltageConfig(level_v=level_v, current_limit_a=current_limit, autorange=autorange)
             )
             controller.configure_display_for_voltage()
+            self._output_enabled = False
+            self._measurement_timer.stop()
             self.window.append_log(
                 f"Applied settings: {level_v:.3f} V, {current_limit:.6f} A, autorange={'on' if autorange else 'off'}"
             )
@@ -138,33 +149,30 @@ class Application:
             controller.enable_output(enabled)
             controller.configure_display_for_voltage()
             reading_msg = ""
-            try:
-                reading = controller.measure_voltage()
-            except Exception as exc:  # pragma: no cover - requires hardware quirks
-                reading_msg = f" (voltage readback failed: {exc})"
+            if enabled:
+                try:
+                    reading = controller.measure_voltage()
+                except Exception as exc:  # pragma: no cover - requires hardware quirks
+                    reading_msg = f" (voltage readback failed: {exc})"
+                else:
+                    reading_msg = f" (display reading ≈ {reading:.3f} V)"
+                self._output_enabled = True
+                if not self._measurement_timer.isActive():
+                    self._measurement_timer.start()
             else:
-                reading_msg = f" (display reading ≈ {reading:.3f} V)"
-            state = "enabled" if enabled else "disabled"
-            self.window.append_log(f"Output {state} for {controller.channel.name}{reading_msg}")
+                self._output_enabled = False
+                self._measurement_timer.stop()
             controller.set_beeper_enabled(True)
             controller.beep(0.15, 1200)
-            self._update_compliance()
-        except Exception as exc:  # pragma: no cover
-            self._show_error("Output toggle failed", str(exc))
-            self.window.append_log(f"Output toggle error: {exc}")
-            self.window.set_output_state(False)
-            self.window.append_log("Cannot toggle output while disconnected.")
-            return
-        controller = self._connection.controller
-        try:
-            controller.enable_output(enabled)
             state = "enabled" if enabled else "disabled"
-            self.window.append_log(f"Output {state} for {controller.channel.name}")
+            self.window.append_log(f"Output {state} for {controller.channel.name}{reading_msg}")
             self._update_compliance()
         except Exception as exc:  # pragma: no cover
             self._show_error("Output toggle failed", str(exc))
             self.window.append_log(f"Output toggle error: {exc}")
             self.window.set_output_state(False)
+            self._output_enabled = False
+            self._measurement_timer.stop()
 
     def handle_voltage_change(self, value: float) -> None:
         if self._connection is None:
@@ -177,6 +185,17 @@ class Application:
         self.window.status_bar.showMessage(f"Requested current limit: {value:.6f} A", 2000)
 
     # --- Internal helpers ----------------------------------------------------
+
+    def _poll_measurement(self) -> None:
+        if not self._output_enabled or self._connection is None:
+            return
+        controller = self._connection.controller
+        try:
+            reading = controller.measure_voltage()
+        except Exception as exc:  # pragma: no cover - hardware specific
+            self.window.status_bar.showMessage(f"Measurement failed: {exc}", 3000)
+            return
+        self.window.status_bar.showMessage(f"Measured voltage: {reading:.4f} V", 1500)
 
     def _wire_signals(self) -> None:
         self.window.refresh_requested.connect(self.refresh_resources)
