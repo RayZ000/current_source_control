@@ -145,6 +145,29 @@ class Keithley2612Controller:
                 time.sleep(dwell_s)
         return compliance
 
+    def ramp_to_zero(
+        self,
+        *,
+        step_v: float,
+        dwell_s: float,
+        tolerance_v: float,
+        current_limit_a: Optional[float] = None,
+    ) -> bool:
+        """Bring the output to ~0 V using ramped steps before disabling it."""
+        alias = self._channel.alias
+        current_level = float(self._transport.query(f"print({alias}.source.levelv)") or 0.0)
+        if abs(current_level) <= tolerance_v:
+            return False
+        target = 0.0
+        compliance = self.ramp_to_voltage(
+            target, step_v=step_v, dwell_s=dwell_s, current_limit_a=current_limit_a
+        )
+        # Final trim if still beyond tolerance.
+        current_level = float(self._transport.query(f"print({alias}.source.levelv)") or 0.0)
+        if abs(current_level) > tolerance_v:
+            self.quick_set_source(level_v=0.0, current_limit_a=current_limit_a)
+        return compliance
+
     def enable_output(self, enabled: bool) -> None:
         alias = self._channel.alias
         state = "OUTPUT_ON" if enabled else "OUTPUT_OFF"

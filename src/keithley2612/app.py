@@ -94,6 +94,7 @@ class Application:
             return
         controller = self._connection.controller
         try:
+            self._perform_safe_shutdown()
             controller.enable_output(False)
         except Exception:
             pass
@@ -124,6 +125,7 @@ class Application:
             return
         controller = self._connection.controller
         try:
+            self._perform_safe_shutdown()
             controller.enable_output(False)
             controller.configure_voltage_source(
                 VoltageConfig(level_v=level_v, current_limit_a=current_limit, autorange=autorange)
@@ -219,6 +221,8 @@ class Application:
             return
         controller = self._connection.controller
         try:
+            if not enabled and self.window.safe_shutdown_enabled():
+                self._perform_safe_shutdown()
             controller.enable_output(enabled)
             controller.configure_display_for_voltage()
             reading_msg = ""
@@ -272,6 +276,31 @@ class Application:
             return
         self.window.status_bar.showMessage(f"Measured voltage: {reading:.4f} V", 1500)
         self._log_error_queue("Measurement poll")
+
+
+    def _perform_safe_shutdown(self) -> None:
+        if self._connection is None or not self.window.safe_shutdown_enabled():
+            return
+        controller = self._connection.controller
+        try:
+            step_v = max(self.window.safe_ramp_step(), 0.001)
+            dwell_s = max(self.window.safe_ramp_dwell(), 0.0)
+            tolerance = max(self.window.safe_shutdown_tolerance(), 0.1)
+            compliance = controller.ramp_to_zero(
+                step_v=step_v,
+                dwell_s=dwell_s,
+                tolerance_v=tolerance,
+                current_limit_a=self.window.current_limit_spin.value(),
+            )
+            if compliance:
+                self.window.append_log(
+                    "Safe shutdown ramp hit compliance; verify limits before next run."
+                )
+        except Exception as exc:  # pragma: no cover - VISA/hardware quirks
+            self.window.append_log(f"Safe shutdown ramp failed: {exc}")
+        finally:
+            self._output_enabled = False
+            self._measurement_timer.stop()
 
     def _log_error_queue(self, context: str) -> None:
         if self._connection is None:

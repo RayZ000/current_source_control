@@ -125,3 +125,19 @@ def test_ramp_to_voltage_uses_steps():
     assert result is True
     assert controller.read_compliance() is True
     controller.disconnect()
+
+
+def test_ramp_to_zero_respects_tolerance():
+    transport = SimulatedTransport()
+    controller = Keithley2612Controller(transport)
+
+    controller.connect()
+    controller.reset()
+    controller.configure_voltage_source(VoltageConfig(level_v=0.5, current_limit_a=0.001))
+    controller.enable_output(True)
+
+    controller.ramp_to_zero(step_v=0.2, dwell_s=0.0, tolerance_v=0.05, current_limit_a=0.001)
+    state = transport._channels[Channel.A.value]
+    assert abs(state.level_v) <= 0.05
+
+    controller.disconnect()

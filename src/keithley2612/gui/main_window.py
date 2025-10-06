@@ -69,7 +69,11 @@ class MainWindow(QMainWindow):
         self.apply_button.setEnabled(connected)
         self.quick_button.setEnabled(connected)
         self.safe_ramp_check.setEnabled(connected)
-        self._toggle_safe_ramp_controls(connected and self.safe_ramp_check.isChecked())
+        self.safe_shutdown_check.setEnabled(connected)
+        self._update_safe_control_states()
+        if not connected:
+            self.safe_shutdown_check.setChecked(True)
+            self._update_safe_control_states()
         self.channel_a.setEnabled(connected)
         self.channel_b.setEnabled(connected)
         self.autorange_check.setEnabled(connected)
@@ -216,14 +220,24 @@ class MainWindow(QMainWindow):
         self.ramp_dwell_spin.setValue(0.1)
         self.ramp_dwell_spin.setSuffix(" s")
         ramp_row.addWidget(self.ramp_dwell_spin)
+        self.safe_shutdown_check = QCheckBox("Safe Shutdown")
+        self.safe_shutdown_check.setChecked(True)
+        ramp_row.addWidget(self.safe_shutdown_check)
+        self.shutdown_tol_spin = QDoubleSpinBox()
+        self.shutdown_tol_spin.setRange(0.1, 50.0)
+        self.shutdown_tol_spin.setDecimals(2)
+        self.shutdown_tol_spin.setValue(5.0)
+        self.shutdown_tol_spin.setSuffix(" V tol")
+        ramp_row.addWidget(self.shutdown_tol_spin)
         ramp_row.addStretch()
         layout.addLayout(ramp_row)
 
         self.apply_button.clicked.connect(self._emit_apply)
         self.quick_button.clicked.connect(self._emit_quick_change)
         self.output_button.toggled.connect(self._emit_output_toggle)
-        self.safe_ramp_check.toggled.connect(self._toggle_safe_ramp_controls)
-        self._toggle_safe_ramp_controls(False)
+        self.safe_ramp_check.toggled.connect(self._update_safe_control_states)
+        self.safe_shutdown_check.toggled.connect(self._update_safe_control_states)
+        self._update_safe_control_states()
         return group
 
     def _emit_apply(self) -> None:
@@ -252,9 +266,11 @@ class MainWindow(QMainWindow):
         return group
 
 
-    def _toggle_safe_ramp_controls(self, enabled: bool) -> None:
-        self.ramp_step_spin.setEnabled(enabled)
-        self.ramp_dwell_spin.setEnabled(enabled)
+    def _update_safe_control_states(self) -> None:
+        check = self.safe_ramp_check.isChecked() or self.safe_shutdown_check.isChecked()
+        self.ramp_step_spin.setEnabled(check)
+        self.ramp_dwell_spin.setEnabled(check)
+        self.shutdown_tol_spin.setEnabled(self.safe_shutdown_check.isChecked())
 
     def safe_ramp_enabled(self) -> bool:
         return self.safe_ramp_check.isChecked()
@@ -264,6 +280,12 @@ class MainWindow(QMainWindow):
 
     def safe_ramp_dwell(self) -> float:
         return self.ramp_dwell_spin.value()
+
+    def safe_shutdown_enabled(self) -> bool:
+        return self.safe_shutdown_check.isChecked()
+
+    def safe_shutdown_tolerance(self) -> float:
+        return self.shutdown_tol_spin.value()
 
 
 class _SignalBlocker:

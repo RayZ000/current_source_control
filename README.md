@@ -11,7 +11,7 @@ pip install -e .[dev]
 python -m keithley2612
 ```
 
-Select `sim://2612` while developing without hardware; switch to your `GPIB0::<address>::INSTR` resource on the lab PC and run `scripts/smoke_check.py` to confirm connectivity. Use `scripts/panel_feedback_check.py` to verify front-panel beeps and voltage display mirror the hardware workflow. The GUI now offers `Quick Change` with optional Safe Ramp for live voltage tweaks when the output is enabled.
+Select `sim://2612` while developing without hardware; switch to your `GPIB0::<address>::INSTR` resource on the lab PC and run `scripts/smoke_check.py` to confirm connectivity. Use `scripts/panel_feedback_check.py` to verify front-panel beeps and voltage display mirror the hardware workflow. The GUI now offers `Quick Change` with optional Safe Ramp and Safe Shutdown for live voltage tweaks when the output is enabled.
 
 ## Tests
 
