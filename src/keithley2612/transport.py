@@ -193,6 +193,8 @@ class SimulatedTransport:
             return f"{state.level_v}"
         if expr.endswith(".measure.i()"):
             return "0.0"
+        if expr == "errorqueue.count":
+            return str(len(self._error_queue))
         raise NotImplementedError(f"Simulator cannot handle expression: {expr}")
 
     def set_compliance(self, channel: str, compliance: bool) -> None:

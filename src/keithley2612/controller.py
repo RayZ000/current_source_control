@@ -122,16 +122,26 @@ class Keithley2612Controller:
     def drain_error_queue(self) -> list[ErrorEntry]:
         """Retrieve and clear the instrument error queue."""
         entries: list[ErrorEntry] = []
+        try:
+            count_resp = self._transport.query("print(errorqueue.count)")
+        except Exception as exc:
+            raise RuntimeError(f"Failed to read error count: {exc}") from exc
+        try:
+            count = int((count_resp or "0").strip() or "0")
+        except ValueError:
+            count = 0
+        if count <= 0:
+            return entries
         script = (
             "local code, msg, severity, node = errorqueue.next();"
             "if code then print(string.format('%d|%s|%d|%d', code, msg, severity, node)) end"
         )
-        while True:
+        for _ in range(count):
             response = self._transport.query(script)
-            text = response.strip()
-            if not text:
-                break
-            parts = text.split("|", 3)
+            text_resp = response.strip()
+            if not text_resp:
+                continue
+            parts = text_resp.split("|", 3)
             if len(parts) != 4:
                 continue
             code, message, severity, node = parts
