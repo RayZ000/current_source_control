@@ -69,6 +69,7 @@ class _ChannelState:
     limit_i: float = 1e-3
     output_on: bool = False
     compliance: bool = False
+    display_measure: str = "MEASURE_DCAMPS"
 
 
 @dataclass
@@ -82,6 +83,8 @@ class SimulatedTransport:
         default_factory=lambda: {"smua": _ChannelState(), "smub": _ChannelState()},
         init=False,
     )
+    _beeper_enabled: bool = field(default=False, init=False)
+    _display_screen: str = field(default="HOME", init=False)
 
     def open(self) -> None:
         self._is_open = True
@@ -111,10 +114,24 @@ class SimulatedTransport:
         if command == "*RST":
             for state in self._channels.values():
                 state.__dict__.update(_ChannelState().__dict__)
+            self._beeper_enabled = False
+            self._display_screen = "HOME"
             return
         if command.endswith("reset()"):
             channel = command.split(".")[0]
             self._channels[channel] = _ChannelState()
+            return
+        if command.startswith("beeper.enable"):
+            value = command.split("=")[-1].strip()
+            self._beeper_enabled = value in {"1", "true", "True"}
+            return
+        if command.startswith("display.screen"):
+            self._display_screen = command.split("=")[-1].strip().split(".")[-1]
+            return
+        if command.startswith("display.smu") and "measure.func" in command:
+            lhs, rhs = [part.strip() for part in command.split("=", maxsplit=1)]
+            channel = lhs.split(".")[1]
+            self._channels[channel].display_measure = rhs.split(".")[-1]
             return
         if "=" in command:
             lhs, rhs = [part.strip() for part in command.split("=", maxsplit=1)]
@@ -146,3 +163,12 @@ class SimulatedTransport:
 
     def set_compliance(self, channel: str, compliance: bool) -> None:
         self._channels[channel].compliance = compliance
+
+    # Convenience accessors used by tests----------------------------------------------
+    @property
+    def beeper_enabled(self) -> bool:
+        return self._beeper_enabled
+
+    @property
+    def display_screen(self) -> str:
+        return self._display_screen

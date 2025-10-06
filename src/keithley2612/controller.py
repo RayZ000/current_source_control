@@ -99,6 +99,20 @@ class Keithley2612Controller:
         response = self._transport.query(f"print({alias}.source.compliance)")
         return response.strip() in {"1", "true", "True"}
 
+    def set_beeper_enabled(self, enabled: bool) -> None:
+        """Enable or disable the front-panel beeper."""
+        self._write(f"beeper.enable = {1 if enabled else 0}")
+
+    def configure_display_for_voltage(self) -> None:
+        """Mirror the selected channel and show voltage on the front-panel display."""
+        alias = self._channel.alias
+        channel_constant = alias.upper()
+        commands = [
+            f"display.screen = display.{channel_constant}",
+            f"display.{alias}.measure.func = display.MEASURE_DCVOLTS",
+        ]
+        self._batch_write(commands)
+
     def _write(self, command: str) -> None:
         if not self._connected:
             raise RuntimeError("Instrument is not connected")

@@ -45,3 +45,22 @@ def test_switching_channels_isolated_state():
     assert pytest.approx(state_b.limit_i, rel=1e-6) == 0.004
 
     controller.disconnect()
+
+
+def test_beeper_and_display_configuration():
+    transport = SimulatedTransport()
+    controller = Keithley2612Controller(transport)
+
+    controller.connect()
+    controller.set_beeper_enabled(True)
+    controller.configure_display_for_voltage()
+    assert transport.beeper_enabled is True
+    assert transport.display_screen == "SMUA"
+    assert transport._channels[Channel.A.value].display_measure == "MEASURE_DCVOLTS"
+
+    controller.select_channel(Channel.B)
+    controller.configure_display_for_voltage()
+    assert transport.display_screen == "SMUB"
+    assert transport._channels[Channel.B.value].display_measure == "MEASURE_DCVOLTS"
+
+    controller.disconnect()

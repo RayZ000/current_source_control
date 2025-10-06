@@ -59,6 +59,8 @@ class Application:
             identity = controller.identify()
             self.window.append_log(f"Connected to {identity}")
             self.window.set_connection_state(True)
+            controller.set_beeper_enabled(True)
+            controller.configure_display_for_voltage()
             controller.configure_voltage_source(
                 VoltageConfig(
                     level_v=self.window.voltage_spin.value(),
@@ -99,6 +101,7 @@ class Application:
         channel = Channel(alias)
         try:
             self._connection.controller.select_channel(channel)
+            self._connection.controller.configure_display_for_voltage()
             self.window.append_log(f"Switched to {alias.upper()}")
             self._update_compliance()
         except Exception as exc:  # pragma: no cover - PyQt runtime behaviour
@@ -115,6 +118,7 @@ class Application:
             controller.configure_voltage_source(
                 VoltageConfig(level_v=level_v, current_limit_a=current_limit, autorange=autorange)
             )
+            controller.configure_display_for_voltage()
             self.window.append_log(
                 f"Applied settings: {level_v:.3f} V, {current_limit:.6f} A, autorange={'on' if autorange else 'off'}"
             )
