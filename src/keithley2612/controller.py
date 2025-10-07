@@ -1,6 +1,8 @@
 """High-level Keithley 2612 controller built on top of a transport layer."""
 from __future__ import annotations
 
+import time
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import Iterable, Optional

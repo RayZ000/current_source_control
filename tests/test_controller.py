@@ -127,6 +127,27 @@ def test_ramp_to_voltage_uses_steps():
     controller.disconnect()
 
 
+def test_ramp_to_voltage_honours_dwell(monkeypatch):
+    transport = SimulatedTransport()
+    controller = Keithley2612Controller(transport)
+
+    controller.connect()
+    controller.reset()
+    controller.configure_voltage_source(VoltageConfig(level_v=0.0, current_limit_a=0.005))
+    controller.enable_output(True)
+
+    sleeps: list[float] = []
+    monkeypatch.setattr("keithley2612.controller.time.sleep", lambda duration: sleeps.append(duration))
+
+    controller.ramp_to_voltage(0.06, step_v=0.02, dwell_s=0.1, current_limit_a=0.005)
+
+    state = transport._channels[Channel.A.value]
+    assert pytest.approx(state.level_v, rel=1e-6) == 0.06
+    assert sleeps == [0.1, 0.1, 0.1]
+
+    controller.disconnect()
+
+
 def test_ramp_to_zero_respects_tolerance():
     transport = SimulatedTransport()
     controller = Keithley2612Controller(transport)
