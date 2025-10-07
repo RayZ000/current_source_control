@@ -37,6 +37,7 @@ class Application:
         self._wire_signals()
         self.window.show()
         self.refresh_resources()
+        self._sync_apply_button()
 
     def run(self) -> int:
         return self.app.exec()
@@ -81,6 +82,7 @@ class Application:
             self.window.set_output_state(False)
             self.window.set_compliance_status(True)
             self._log_error_queue("Connect")
+            self._sync_apply_button()
         except Exception as exc:  # pragma: no cover - PyQt runtime behaviour
             self._show_error("Failed to connect", str(exc))
             self.window.append_log(f"Connection error: {exc}")
@@ -107,6 +109,7 @@ class Application:
         self._measurement_timer.stop()
         self.window.set_connection_state(False)
         self.window.set_compliance_status(True)
+        self._sync_apply_button()
 
     def handle_channel_change(self, alias: str) -> None:
         if self._connection is None:
@@ -139,12 +142,13 @@ class Application:
                 f"Applied settings: {level_v:.3f} V, {current_limit:.6f} A, autorange={'on' if autorange else 'off'}"
             )
             self.window.set_output_state(False)
-            self.window.apply_button.setEnabled(True)
+            self._sync_apply_button()
             self._update_compliance()
             self._log_error_queue("Apply Settings")
         except Exception as exc:  # pragma: no cover
             self._show_error("Apply failed", str(exc))
             self.window.append_log(f"Apply error: {exc}")
+            self._sync_apply_button()
 
     def handle_quick_change(self, level_v: float, current_limit: float) -> None:
         if self._connection is None:
@@ -170,6 +174,7 @@ class Application:
                 self.window.append_log("Quick change cached with output off; enable output to drive the new level.")
                 self._update_compliance()
                 self._log_error_queue("Quick Change (output off)")
+                self._sync_apply_button()
                 return
             ramp_active = self.window.safe_ramp_enabled()
             compliance = False
@@ -228,7 +233,9 @@ class Application:
         except Exception as exc:  # pragma: no cover
             self._show_error("Quick Change failed", str(exc))
             self.window.append_log(f"Quick Change error: {exc}")
+            self._sync_apply_button()
             return
+        self._sync_apply_button()
         self._log_error_queue("Quick Change")
 
     def handle_output_toggle(self, enabled: bool) -> None:
@@ -240,6 +247,15 @@ class Application:
         try:
             if not enabled and self.window.safe_shutdown_enabled():
                 self._perform_safe_shutdown()
+            if enabled and not self._output_enabled and self.window.safe_ramp_enabled():
+                compliance = controller.quick_set_source(level_v=0.0)
+                self.window.append_log(
+                    "Safe Ramp enabled: preset output to 0.000 V; use Quick Change to ramp to your target."
+                )
+                if compliance:
+                    self.window.append_log(
+                        "Compliance active while presetting to 0 V; verify limits before enabling output."
+                    )
             controller.enable_output(enabled)
             controller.configure_display_for_voltage()
             reading_msg = ""
@@ -251,13 +267,12 @@ class Application:
                 else:
                     reading_msg = f" (display reading ≈ {reading:.3f} V)"
                 self._output_enabled = True
-                self.window.apply_button.setEnabled(False)
                 if not self._measurement_timer.isActive():
                     self._measurement_timer.start()
             else:
                 self._output_enabled = False
                 self._measurement_timer.stop()
-                self.window.apply_button.setEnabled(True)
+            self._sync_apply_button()
             controller.set_beeper_enabled(True)
             controller.beep(0.15, 1200)
             state = "enabled" if enabled else "disabled"
@@ -270,6 +285,7 @@ class Application:
             self.window.set_output_state(False)
             self._output_enabled = False
             self._measurement_timer.stop()
+            self._sync_apply_button()
 
     def handle_voltage_change(self, value: float) -> None:
         if self._connection is None:
@@ -354,6 +370,7 @@ class Application:
             self.window.output_button.setEnabled(True)
             self._output_enabled = False
             self._measurement_timer.stop()
+            self._sync_apply_button()
 
     def _log_error_queue(self, context: str) -> None:
         if self._connection is None:
@@ -371,6 +388,11 @@ class Application:
                 context, entry.code, entry.severity, entry.message
             ))
 
+    def _sync_apply_button(self) -> None:
+        safe_ramp = self.window.safe_ramp_enabled()
+        connected = self._connection is not None
+        self.window.apply_button.setEnabled(connected and not self._output_enabled and not safe_ramp)
+
     def _wire_signals(self) -> None:
         self.window.refresh_requested.connect(self.refresh_resources)
         self.window.connect_requested.connect(self.handle_connect)
@@ -381,6 +403,7 @@ class Application:
         self.window.output_toggled.connect(self.handle_output_toggle)
         self.window.voltage_changed.connect(self.handle_voltage_change)
         self.window.current_limit_changed.connect(self.handle_current_limit_change)
+        self.window.safe_ramp_check.toggled.connect(lambda _: self._sync_apply_button())
 
     def _open_controller(self, resource: str) -> Keithley2612Controller:
         if resource.lower().startswith("sim"):
