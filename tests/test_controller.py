@@ -210,3 +210,59 @@ def test_ramp_to_voltage_progress_handles_measurement_error(monkeypatch):
         assert reading is None
 
     controller.disconnect()
+
+
+def test_ramp_to_zero_emits_progress(monkeypatch):
+    transport = SimulatedTransport()
+    controller = Keithley2612Controller(transport)
+
+    controller.connect()
+    controller.reset()
+    controller.configure_voltage_source(VoltageConfig(level_v=0.0, current_limit_a=0.001))
+    controller.enable_output(True)
+
+    controller.quick_set_source(level_v=0.6)
+
+    sleeps: list[float] = []
+    monkeypatch.setattr("keithley2612.controller.time.sleep", lambda duration: sleeps.append(duration))
+
+    progress_updates: list[tuple[float, Optional[float]]] = []
+    controller.ramp_to_zero(
+        step_v=0.2,
+        dwell_s=0.05,
+        tolerance_v=0.05,
+        current_limit_a=0.001,
+        progress=lambda level, reading: progress_updates.append((level, reading)),
+    )
+
+    expected_levels = [0.4, 0.2, 0.0]
+    assert sleeps == [0.05, 0.05, 0.05]
+    assert len(progress_updates) == len(expected_levels)
+    for (level, reading), expected in zip(progress_updates, expected_levels):
+        assert level == pytest.approx(expected, rel=1e-6)
+        assert reading == pytest.approx(expected, rel=1e-6)
+
+    controller.disconnect()
+
+
+def test_ramp_to_zero_skips_progress_within_tolerance():
+    transport = SimulatedTransport()
+    controller = Keithley2612Controller(transport)
+
+    controller.connect()
+    controller.reset()
+    controller.configure_voltage_source(VoltageConfig(level_v=0.1, current_limit_a=0.001))
+    controller.enable_output(True)
+
+    progress_updates: list[tuple[float, Optional[float]]] = []
+    controller.ramp_to_zero(
+        step_v=0.2,
+        dwell_s=0.0,
+        tolerance_v=0.2,
+        current_limit_a=0.001,
+        progress=lambda level, reading: progress_updates.append((level, reading)),
+    )
+
+    assert progress_updates == []
+
+    controller.disconnect()

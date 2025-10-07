@@ -300,11 +300,25 @@ class Application:
             step_v = max(self.window.safe_ramp_step(), 0.001)
             dwell_s = max(self.window.safe_ramp_dwell(), 0.0)
             tolerance = max(self.window.safe_shutdown_tolerance(), 0.1)
+            self.window.append_log(
+                f"Safe shutdown ramp in {step_v:.3f} V steps with {dwell_s:.3f} s dwell (tolerance {tolerance:.2f} V)."
+            )
+            self.window.output_button.setEnabled(False)
+
+            def _progress(level: float, reading: Optional[float]) -> None:
+                display = f"≈ {reading:.3f} V" if reading is not None else "unavailable"
+                message = (
+                    f"Safe shutdown {controller.channel.alias.upper()}: step set {level:.3f} V ({display})"
+                )
+                self.window.status_bar.showMessage(message, 1000)
+                self.app.processEvents()
+
             compliance = controller.ramp_to_zero(
                 step_v=step_v,
                 dwell_s=dwell_s,
                 tolerance_v=tolerance,
                 current_limit_a=self.window.current_limit_spin.value(),
+                progress=_progress,
             )
             if compliance:
                 self.window.append_log(
@@ -313,6 +327,7 @@ class Application:
         except Exception as exc:  # pragma: no cover - VISA/hardware quirks
             self.window.append_log(f"Safe shutdown ramp failed: {exc}")
         finally:
+            self.window.output_button.setEnabled(True)
             self._output_enabled = False
             self._measurement_timer.stop()
 
