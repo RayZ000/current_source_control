@@ -177,9 +177,23 @@ class Application:
                 self.window.append_log(
                     f"Quick change ramping in {step_v:.3f} V steps with {dwell_s:.3f} s dwell."
                 )
+
+                def _progress(level: float, reading: Optional[float]) -> None:
+                    display = f"≈ {reading:.3f} V" if reading is not None else "unavailable"
+                    msg = (
+                        f"Ramping {controller.channel.alias.upper()}: target {level_v:.3f} V, "
+                        f"step set {level:.3f} V ({display})"
+                    )
+                    self.window.status_bar.showMessage(msg, 1000)
+                    self.app.processEvents()
+
                 try:
                     compliance = controller.ramp_to_voltage(
-                        level_v, step_v=step_v, dwell_s=dwell_s, current_limit_a=current_limit
+                        level_v,
+                        step_v=step_v,
+                        dwell_s=dwell_s,
+                        current_limit_a=current_limit,
+                        progress=_progress,
                     )
                 finally:
                     self.window.quick_button.setEnabled(True)

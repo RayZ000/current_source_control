@@ -5,7 +5,7 @@ import time
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 from .transport import InstrumentTransport
 
@@ -119,8 +119,13 @@ class Keithley2612Controller:
         step_v: float,
         dwell_s: float,
         current_limit_a: Optional[float] = None,
+        progress: Optional[Callable[[float, Optional[float]], None]] = None,
     ) -> bool:
-        """Ramp the output to target_v in step_v increments with dwell_s delays."""
+        """Ramp the output to target_v in step_v increments with dwell_s delays.
+
+        The optional progress callback receives the commanded level and the measured
+        voltage after each step so callers can surface real-time feedback.
+        """
         if step_v <= 0:
             raise ValueError("step_v must be positive")
         if dwell_s < 0:
@@ -129,7 +134,11 @@ class Keithley2612Controller:
         current_level = float(self._transport.query(f"print({alias}.source.levelv)") or 0.0)
         delta = target_v - current_level
         if abs(delta) <= step_v:
-            return self.quick_set_source(level_v=target_v, current_limit_a=current_limit_a)
+            compliance = self.quick_set_source(level_v=target_v, current_limit_a=current_limit_a)
+            reading = self._safe_measure_voltage()
+            if progress is not None:
+                progress(target_v, reading)
+            return compliance
         steps = int(abs(delta) // step_v)
         if abs(delta) % step_v:
             steps += 1
@@ -143,6 +152,9 @@ class Keithley2612Controller:
             compliance = self.quick_set_source(
                 level_v=level, current_limit_a=current_limit_a if i == 0 else None
             ) or compliance
+            reading = self._safe_measure_voltage()
+            if progress is not None:
+                progress(level, reading)
             if dwell_s:
                 time.sleep(dwell_s)
         return compliance
@@ -154,6 +166,7 @@ class Keithley2612Controller:
         dwell_s: float,
         tolerance_v: float,
         current_limit_a: Optional[float] = None,
+        progress: Optional[Callable[[float, Optional[float]], None]] = None,
     ) -> bool:
         """Bring the output to ~0 V using ramped steps before disabling it."""
         alias = self._channel.alias
@@ -162,7 +175,11 @@ class Keithley2612Controller:
             return False
         target = 0.0
         compliance = self.ramp_to_voltage(
-            target, step_v=step_v, dwell_s=dwell_s, current_limit_a=current_limit_a
+            target,
+            step_v=step_v,
+            dwell_s=dwell_s,
+            current_limit_a=current_limit_a,
+            progress=progress,
         )
         # Final trim if still beyond tolerance.
         current_level = float(self._transport.query(f"print({alias}.source.levelv)") or 0.0)
@@ -248,6 +265,12 @@ class Keithley2612Controller:
     def _batch_write(self, commands: Iterable[str]) -> None:
         for command in commands:
             self._write(command)
+
+    def _safe_measure_voltage(self) -> Optional[float]:
+        try:
+            return self.measure_voltage()
+        except Exception:
+            return None
 
 
 

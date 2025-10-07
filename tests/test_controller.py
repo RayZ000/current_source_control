@@ -1,3 +1,5 @@
+from typing import Optional
+
 import pytest
 
 from keithley2612 import Channel, ErrorEntry, Keithley2612Controller, VoltageConfig
@@ -139,11 +141,25 @@ def test_ramp_to_voltage_honours_dwell(monkeypatch):
     sleeps: list[float] = []
     monkeypatch.setattr("keithley2612.controller.time.sleep", lambda duration: sleeps.append(duration))
 
-    controller.ramp_to_voltage(0.06, step_v=0.02, dwell_s=0.1, current_limit_a=0.005)
+    progress_updates: list[tuple[float, Optional[float]]] = []
+
+    controller.ramp_to_voltage(
+        0.06,
+        step_v=0.02,
+        dwell_s=0.1,
+        current_limit_a=0.005,
+        progress=lambda level, reading: progress_updates.append((level, reading)),
+    )
 
     state = transport._channels[Channel.A.value]
     assert pytest.approx(state.level_v, rel=1e-6) == 0.06
     assert sleeps == [0.1, 0.1, 0.1]
+
+    expected_levels = [0.02, 0.04, 0.06]
+    assert len(progress_updates) == len(expected_levels)
+    for (level, reading), expected in zip(progress_updates, expected_levels):
+        assert level == pytest.approx(expected, rel=1e-6)
+        assert reading == pytest.approx(expected, rel=1e-6)
 
     controller.disconnect()
 
@@ -160,5 +176,37 @@ def test_ramp_to_zero_respects_tolerance():
     controller.ramp_to_zero(step_v=0.2, dwell_s=0.0, tolerance_v=0.05, current_limit_a=0.001)
     state = transport._channels[Channel.A.value]
     assert abs(state.level_v) <= 0.05
+
+    controller.disconnect()
+
+
+def test_ramp_to_voltage_progress_handles_measurement_error(monkeypatch):
+    transport = SimulatedTransport()
+    controller = Keithley2612Controller(transport)
+
+    controller.connect()
+    controller.reset()
+    controller.configure_voltage_source(VoltageConfig(level_v=0.0, current_limit_a=0.005))
+    controller.enable_output(True)
+
+    def broken_measure() -> float:
+        raise ValueError("boom")
+
+    monkeypatch.setattr(controller, "measure_voltage", broken_measure)
+
+    progress_updates: list[tuple[float, Optional[float]]] = []
+    controller.ramp_to_voltage(
+        0.03,
+        step_v=0.01,
+        dwell_s=0.0,
+        current_limit_a=0.005,
+        progress=lambda level, reading: progress_updates.append((level, reading)),
+    )
+
+    expected_levels = [0.01, 0.02, 0.03]
+    assert len(progress_updates) == len(expected_levels)
+    for (level, reading), expected in zip(progress_updates, expected_levels):
+        assert level == pytest.approx(expected, rel=1e-6)
+        assert reading is None
 
     controller.disconnect()
