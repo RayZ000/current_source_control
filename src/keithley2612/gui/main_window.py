@@ -193,8 +193,6 @@ class MainWindow(QMainWindow):
         button_row = QHBoxLayout()
         self.apply_button = QPushButton("Apply Settings")
         button_row.addWidget(self.apply_button)
-        self.apply_button = QPushButton("Apply Settings")
-        button_row.addWidget(self.apply_button)
         self.quick_button = QPushButton("Quick Change")
         button_row.addWidget(self.quick_button)
         self.output_button = QPushButton("Enable Output")
