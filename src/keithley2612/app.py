@@ -139,6 +139,7 @@ class Application:
                 f"Applied settings: {level_v:.3f} V, {current_limit:.6f} A, autorange={'on' if autorange else 'off'}"
             )
             self.window.set_output_state(False)
+            self.window.apply_button.setEnabled(True)
             self._update_compliance()
             self._log_error_queue("Apply Settings")
         except Exception as exc:  # pragma: no cover
@@ -250,11 +251,13 @@ class Application:
                 else:
                     reading_msg = f" (display reading ≈ {reading:.3f} V)"
                 self._output_enabled = True
+                self.window.apply_button.setEnabled(False)
                 if not self._measurement_timer.isActive():
                     self._measurement_timer.start()
             else:
                 self._output_enabled = False
                 self._measurement_timer.stop()
+                self.window.apply_button.setEnabled(True)
             controller.set_beeper_enabled(True)
             controller.beep(0.15, 1200)
             state = "enabled" if enabled else "disabled"

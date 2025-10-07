@@ -66,7 +66,7 @@ class MainWindow(QMainWindow):
         self.resource_combo.setEnabled(not connected)
         self.refresh_button.setEnabled(not connected)
         self.output_button.setEnabled(connected)
-        self.apply_button.setEnabled(connected)
+        self.apply_button.setEnabled(connected and not self.output_button.isChecked() and not self.safe_ramp_check.isChecked())
         self.quick_button.setEnabled(connected)
         self.safe_ramp_check.setEnabled(connected)
         self.safe_shutdown_check.setEnabled(connected)
