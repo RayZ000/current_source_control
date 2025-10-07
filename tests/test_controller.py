@@ -266,3 +266,40 @@ def test_ramp_to_zero_skips_progress_within_tolerance():
     assert progress_updates == []
 
     controller.disconnect()
+
+
+def test_ramp_to_zero_uses_last_level_when_query_blank(monkeypatch):
+    transport = SimulatedTransport()
+    controller = Keithley2612Controller(transport)
+
+    controller.connect()
+    controller.reset()
+    controller.configure_voltage_source(VoltageConfig(level_v=0.0, current_limit_a=0.001))
+    controller.enable_output(True)
+    controller.quick_set_source(level_v=0.6)
+
+    original_query = controller._transport.query
+
+    def fake_query(command: str) -> str:
+        if ".source.levelv" in command:
+            return ""
+        return original_query(command)
+
+    monkeypatch.setattr(controller._transport, "query", fake_query)
+
+    progress_updates: list[tuple[float, Optional[float]]] = []
+    controller.ramp_to_zero(
+        step_v=0.2,
+        dwell_s=0.0,
+        tolerance_v=0.05,
+        current_limit_a=0.001,
+        progress=lambda level, reading: progress_updates.append((level, reading)),
+    )
+
+    expected_levels = [0.4, 0.2, 0.0]
+    assert len(progress_updates) == len(expected_levels)
+    for (level, reading), expected in zip(progress_updates, expected_levels):
+        assert level == pytest.approx(expected, rel=1e-6)
+        assert reading == pytest.approx(expected, rel=1e-6)
+
+    controller.disconnect()

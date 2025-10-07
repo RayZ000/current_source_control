@@ -1,6 +1,8 @@
 """Glue code that wires the PyQt6 GUI to the instrument controller."""
 from __future__ import annotations
 
+import time
+
 from dataclasses import dataclass
 from typing import Optional
 
@@ -297,9 +299,14 @@ class Application:
             return
         controller = self._connection.controller
         try:
+            was_polling = self._measurement_timer.isActive()
+            if was_polling:
+                self._measurement_timer.stop()
             step_v = max(self.window.safe_ramp_step(), 0.001)
             dwell_s = max(self.window.safe_ramp_dwell(), 0.0)
             tolerance = max(self.window.safe_shutdown_tolerance(), 0.1)
+            start_level = controller.read_source_level()
+            start_time = time.perf_counter()
             self.window.append_log(
                 f"Safe shutdown ramp in {step_v:.3f} V steps with {dwell_s:.3f} s dwell (tolerance {tolerance:.2f} V)."
             )
@@ -311,6 +318,7 @@ class Application:
                     f"Safe shutdown {controller.channel.alias.upper()}: step set {level:.3f} V ({display})"
                 )
                 self.window.status_bar.showMessage(message, 1000)
+                self.window.append_log(message)
                 self.app.processEvents()
 
             compliance = controller.ramp_to_zero(
@@ -319,6 +327,11 @@ class Application:
                 tolerance_v=tolerance,
                 current_limit_a=self.window.current_limit_spin.value(),
                 progress=_progress,
+            )
+            elapsed = time.perf_counter() - start_time
+            end_level = controller.read_source_level()
+            self.window.append_log(
+                f"Safe shutdown ramp complete: start ≈ {start_level:.3f} V, end ≈ {end_level:.3f} V in {elapsed:.1f} s"
             )
             if compliance:
                 self.window.append_log(

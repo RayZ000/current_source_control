@@ -44,6 +44,7 @@ class Keithley2612Controller:
         self._transport = transport
         self._channel = default_channel
         self._connected = False
+        self._last_level = 0.0
 
     @property
     def channel(self) -> Channel:
@@ -67,6 +68,7 @@ class Keithley2612Controller:
     def reset(self) -> None:
         self._write("*RST")
         self._write(f"{self._channel.alias}.reset()")
+        self._last_level = 0.0
 
     def select_channel(self, channel: Channel) -> None:
         if channel == self._channel:
@@ -74,6 +76,7 @@ class Keithley2612Controller:
         self._channel = channel
         # Reset the new channel to a known state before use.
         self._write(f"{channel.alias}.reset()")
+        self._last_level = 0.0
 
     def configure_voltage_source(self, config: VoltageConfig) -> None:
         alias = self._channel.alias
@@ -91,10 +94,12 @@ class Keithley2612Controller:
             ]
         )
         self._batch_write(commands)
+        self._last_level = config.level_v
 
     def set_voltage(self, level_v: float) -> None:
         alias = self._channel.alias
         self._write(f"{alias}.source.levelv = {level_v}")
+        self._last_level = level_v
 
     def set_current_limit(self, current_limit_a: float) -> None:
         alias = self._channel.alias
@@ -110,6 +115,8 @@ class Keithley2612Controller:
             commands.append(f"{alias}.source.limiti = {current_limit_a}")
         if commands:
             self._batch_write(commands)
+        if level_v is not None:
+            self._last_level = level_v
         return self.read_compliance()
 
     def ramp_to_voltage(
@@ -130,8 +137,7 @@ class Keithley2612Controller:
             raise ValueError("step_v must be positive")
         if dwell_s < 0:
             raise ValueError("dwell_s must be non-negative")
-        alias = self._channel.alias
-        current_level = float(self._transport.query(f"print({alias}.source.levelv)") or 0.0)
+        current_level = self._read_source_level()
         delta = target_v - current_level
         if abs(delta) <= step_v:
             compliance = self.quick_set_source(level_v=target_v, current_limit_a=current_limit_a)
@@ -169,8 +175,7 @@ class Keithley2612Controller:
         progress: Optional[Callable[[float, Optional[float]], None]] = None,
     ) -> bool:
         """Bring the output to ~0 V using ramped steps before disabling it."""
-        alias = self._channel.alias
-        current_level = float(self._transport.query(f"print({alias}.source.levelv)") or 0.0)
+        current_level = self._read_source_level()
         if abs(current_level) <= tolerance_v:
             return False
         target = 0.0
@@ -182,7 +187,7 @@ class Keithley2612Controller:
             progress=progress,
         )
         # Final trim if still beyond tolerance.
-        current_level = float(self._transport.query(f"print({alias}.source.levelv)") or 0.0)
+        current_level = self._read_source_level()
         if abs(current_level) > tolerance_v:
             self.quick_set_source(level_v=0.0, current_limit_a=current_limit_a)
         return compliance
@@ -196,6 +201,10 @@ class Keithley2612Controller:
         alias = self._channel.alias
         response = self._transport.query(f"print({alias}.source.compliance)")
         return response.strip() in {"1", "true", "True"}
+
+    def read_source_level(self) -> float:
+        """Return the last commanded source level, querying the instrument when possible."""
+        return self._read_source_level()
 
     def drain_error_queue(self) -> list[ErrorEntry]:
         """Retrieve and clear the instrument error queue."""
@@ -271,6 +280,22 @@ class Keithley2612Controller:
             return self.measure_voltage()
         except Exception:
             return None
+
+    def _read_source_level(self) -> float:
+        alias = self._channel.alias
+        try:
+            response = self._transport.query(f"print({alias}.source.levelv)")
+        except Exception:
+            return self._last_level
+        text = (response or "").strip()
+        if not text:
+            return self._last_level
+        try:
+            value = float(text)
+        except ValueError:
+            return self._last_level
+        self._last_level = value
+        return value
 
 
 
