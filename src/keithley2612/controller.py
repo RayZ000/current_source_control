@@ -127,6 +127,7 @@ class Keithley2612Controller:
         dwell_s: float,
         current_limit_a: Optional[float] = None,
         progress: Optional[Callable[[float, Optional[float]], None]] = None,
+        start_level: Optional[float] = None,
     ) -> bool:
         """Ramp the output to target_v in step_v increments with dwell_s delays.
 
@@ -137,7 +138,7 @@ class Keithley2612Controller:
             raise ValueError("step_v must be positive")
         if dwell_s < 0:
             raise ValueError("dwell_s must be non-negative")
-        current_level = self._read_source_level()
+        current_level = start_level if start_level is not None else self._read_source_level()
         delta = target_v - current_level
         if abs(delta) <= step_v:
             compliance = self.quick_set_source(level_v=target_v, current_limit_a=current_limit_a)
@@ -173,9 +174,10 @@ class Keithley2612Controller:
         tolerance_v: float,
         current_limit_a: Optional[float] = None,
         progress: Optional[Callable[[float, Optional[float]], None]] = None,
+        start_level: Optional[float] = None,
     ) -> bool:
         """Bring the output to ~0 V using ramped steps before disabling it."""
-        current_level = self._read_source_level()
+        current_level = start_level if start_level is not None else self._read_source_level()
         if abs(current_level) <= tolerance_v:
             return False
         target = 0.0
@@ -185,6 +187,7 @@ class Keithley2612Controller:
             dwell_s=dwell_s,
             current_limit_a=current_limit_a,
             progress=progress,
+            start_level=current_level,
         )
         # Final trim if still beyond tolerance.
         current_level = self._read_source_level()

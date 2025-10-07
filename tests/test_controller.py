@@ -303,3 +303,37 @@ def test_ramp_to_zero_uses_last_level_when_query_blank(monkeypatch):
         assert reading == pytest.approx(expected, rel=1e-6)
 
     controller.disconnect()
+
+
+def test_ramp_to_voltage_uses_start_level(monkeypatch):
+    transport = SimulatedTransport()
+    controller = Keithley2612Controller(transport)
+
+    controller.connect()
+    controller.reset()
+    controller.enable_output(True)
+
+    # Ensure last level is defined but verify start_level bypasses internal query.
+    controller.quick_set_source(level_v=0.0)
+
+    def explode() -> float:
+        raise AssertionError("_read_source_level should not be called when start_level is provided")
+
+    monkeypatch.setattr(controller, "_read_source_level", explode)
+
+    progress_updates: list[tuple[float, Optional[float]]] = []
+    controller.ramp_to_voltage(
+        0.02,
+        step_v=0.01,
+        dwell_s=0.0,
+        current_limit_a=0.001,
+        progress=lambda level, reading: progress_updates.append((level, reading)),
+        start_level=0.0,
+    )
+
+    expected_levels = [0.01, 0.02]
+    assert len(progress_updates) == len(expected_levels)
+    for (level, _), expected in zip(progress_updates, expected_levels):
+        assert level == pytest.approx(expected, rel=1e-6)
+
+    controller.disconnect()

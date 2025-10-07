@@ -312,11 +312,14 @@ class Application:
             )
             self.window.output_button.setEnabled(False)
 
+            progress_records: list[tuple[float, Optional[float]]] = []
+
             def _progress(level: float, reading: Optional[float]) -> None:
                 display = f"≈ {reading:.3f} V" if reading is not None else "unavailable"
                 message = (
                     f"Safe shutdown {controller.channel.alias.upper()}: step set {level:.3f} V ({display})"
                 )
+                progress_records.append((level, reading))
                 self.window.status_bar.showMessage(message, 1000)
                 self.window.append_log(message)
                 self.app.processEvents()
@@ -327,12 +330,17 @@ class Application:
                 tolerance_v=tolerance,
                 current_limit_a=self.window.current_limit_spin.value(),
                 progress=_progress,
+                start_level=start_level,
             )
             elapsed = time.perf_counter() - start_time
             end_level = controller.read_source_level()
             self.window.append_log(
                 f"Safe shutdown ramp complete: start ≈ {start_level:.3f} V, end ≈ {end_level:.3f} V in {elapsed:.1f} s"
             )
+            if not progress_records and abs(start_level) > tolerance:
+                self.window.append_log(
+                    "Safe shutdown ramp produced no steps; instrument may have rejected the commands."
+                )
             if compliance:
                 self.window.append_log(
                     "Safe shutdown ramp hit compliance; verify limits before next run."
